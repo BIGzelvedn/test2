@@ -55,7 +55,7 @@ save_manager:BuildConfigSection(tabs['ui settings'])
 theme_manager:ApplyToTab(tabs['ui settings'])
 save_manager:LoadAutoloadConfig()
 
--- Sabit Gemi İsimleri
+-- Sabit Gemi İsimleri (Fishing Cutter eklendi)
 local shipNames = {
     'Ace-class RO/RO',
     'Alabama-class container ship',
@@ -68,6 +68,7 @@ local shipNames = {
     'Light container ship',
     'Lusitania-class ocean liner',
     'Mariner-class RO/RO',
+    'Fishing cutter', -- Eklendi
 }
 
 -- Dock koordinatları
@@ -84,7 +85,7 @@ local docks = {
     ['ContainerDock2'] = CFrame.new(-5978.055, -30.315, 26995.453),
     ['ContainerDock3'] = CFrame.new(-14469.223, -30.315, -43598.836),
     ['ContainerDock4'] = CFrame.new(-26785.793, -30.315, -14709.691),
-    ['ContainerDock5'] = CFrame.new(-27036.588, -30.315, -16705.451), -- Adjusted, you can fix if needed
+    ['ContainerDock5'] = CFrame.new(-27036.588, -30.315, -16705.451),
 
     -- Ferry Docks
     ['FerryDock1'] = CFrame.new(26400.57, -30.315, -10151.258),
@@ -93,8 +94,8 @@ local docks = {
     ['FerryDock4'] = CFrame.new(-7557.043, -34.744, 23796.688),
     ['FerryDock5'] = CFrame.new(-4585.654, -34.188, 35438.57),
     ['FerryDock6'] = CFrame.new(-3316.531, -34.188, 35089.848),
-    ['FerryDock7'] = CFrame.new(-27036.588, -30.315, -16705.451), -- Adjust as needed
-    ['FerryDock8'] = CFrame.new(-4585.654, -34.188, 35438.57), -- Adjust as needed
+    ['FerryDock7'] = CFrame.new(-27036.588, -30.315, -16705.451),
+    ['FerryDock8'] = CFrame.new(-4585.654, -34.188, 35438.57),
 
     -- General Docks
     ['GeneralDock1'] = CFrame.new(-15040.437, -22.743, 29779.336),
@@ -183,19 +184,29 @@ local function notify(msg)
     end)
 end
 
--- Gemi bulucu
+-- Gemi bulucu (Fishing Cutter için düzenlendi)
 local function findPlayerShip(name)
     for _, v in pairs(workspace:GetDescendants()) do
         if v.Name == name and v:FindFirstChild('Regen') then
-            local seat = v.Regen:FindFirstChild('Gunboat')
-                and v.Regen.Gunboat:FindFirstChild('VehicleSeat')
-            local owner = seat
-                and seat:FindFirstChild('ShipControl')
-                and seat.ShipControl:FindFirstChild('OWNER')
+            -- Fishing Cutter için özel kontrol
+            local isFishingCutter = name == "Fishing Cutter"
+            local seat = nil
+            
+            if isFishingCutter then
+                seat = v.Regen:FindFirstChild('VehicleSeat')
+            else
+                seat = v.Regen:FindFirstChild('Gunboat') and v.Regen.Gunboat:FindFirstChild('VehicleSeat')
+            end
+            
+            local owner = seat and seat:FindFirstChild('ShipControl') and seat.ShipControl:FindFirstChild('OWNER')
+            
             if owner and owner.Value == local_player then
                 if not v.PrimaryPart then
-                    v.PrimaryPart = v.Regen.Gunboat:FindFirstChild('Base')
-                        or v.Regen.Gunboat:FindFirstChildWhichIsA('BasePart')
+                    if isFishingCutter then
+                        v.PrimaryPart = v.Regen:FindFirstChild('Base') or v.Regen:FindFirstChildWhichIsA('BasePart')
+                    else
+                        v.PrimaryPart = v.Regen.Gunboat:FindFirstChild('Base') or v.Regen.Gunboat:FindFirstChildWhichIsA('BasePart')
+                    end
                 end
                 return v
             end
@@ -206,33 +217,78 @@ end
 -- Tween taşıma fonksiyonu (tamamlanmayı bekler)
 local function moveShipTweened(ship, goalCFrame)
     if not ship or not ship.PrimaryPart then
-        return
+        return false
     end
+    
     local startPos = ship.PrimaryPart.Position
     local goalPos = goalCFrame.Position
     local dist = (startPos - goalPos).Magnitude
+    
+    if dist < 50 then -- Eğer zaten yakınsak tween yapmaya gerek yok
+        return true
+    end
+    
     local tweenInfo = TweenInfo.new(dist / tweenSpeed, Enum.EasingStyle.Linear)
 
-    local tweens = {}
-    local offset = goalPos - startPos
+    -- Tüm parçaları tweenle
+    local connections = {}
+    local completed = false
+    
     for _, part in ipairs(ship:GetDescendants()) do
-        if part:IsA('BasePart') then
+        if part:IsA('BasePart') and part.Anchored == false then
             local tween = tween_service:Create(
                 part,
                 tweenInfo,
-                { CFrame = part.CFrame + offset }
+                { CFrame = part.CFrame + (goalPos - startPos) }
             )
+            
+            local connection
+            connection = tween.Completed:Connect(function()
+                connection:Disconnect()
+                completed = true
+            end)
+            
+            table.insert(connections, connection)
             tween:Play()
-            table.insert(tweens, tween)
         end
     end
+    
+    -- Tween'in tamamlanmasını bekle
+    local startTime = tick()
+    while not completed and tick() - startTime < (dist / tweenSpeed) + 5 do -- Timeout ekle
+        wait(0.1)
+    end
+    
+    -- Bağlantıları temizle
+    for _, connection in ipairs(connections) do
+        pcall(function() connection:Disconnect() end)
+    end
+    
+    return true
+end
 
-    for _, tween in ipairs(tweens) do
-        tween.Completed:Wait()
+-- Kargo yükleme/boşaltma fonksiyonu
+local function handleCargo(action, ship, dockName)
+    local dockPart = workspace:FindFirstChild(dockName)
+    if not dockPart then
+        notify(dockName .. " not found!")
+        return false
+    end
+    
+    local success, result = pcall(function()
+        return workspace.HandleCargoEvent:FireServer(action, ship, dockPart)
+    end)
+    
+    if success then
+        notify("Cargo " .. (action == "load" and "loaded" or "unloaded") .. " successfully!")
+        return true
+    else
+        notify("Cargo " .. action .. " failed: " .. tostring(result))
+        return false
     end
 end
 
--- Lisans ve zaman hesaplamaları (isteğe göre)
+-- Lisans ve zaman hesaplamaları
 local licenseStartTime = os.time()
 local licenseDurationSeconds = 30 * 24 * 60 * 60
 
@@ -263,11 +319,7 @@ local function startAutoFarm()
 
     spawn(function()
         while running do
-            if
-                not selected_ships
-                or not selectedDockLoad
-                or not selectedDockUnload
-            then
+            if not selected_ships or not selectedDockLoad or not selectedDockUnload then
                 notify('Please select ship, load dock and unload dock!')
                 running = false
                 break
@@ -283,49 +335,37 @@ local function startAutoFarm()
             -- Gemi yükleme limanına git
             notify('Going to load dock: ' .. selectedDockLoad)
             local loadDockCFrame = docks[selectedDockLoad]
-            moveShipTweened(ship, loadDockCFrame)
-            notify('Arrived at load dock.')
-
-            -- Load dock objesi workspace'de var mı kontrol et
-            local loadDockPart = workspace:FindFirstChild(selectedDockLoad)
-            if loadDockPart then
-                workspace.HandleCargoEvent:FireServer(
-                    'load',
-                    ship,
-                    loadDockPart
-                )
-                notify('Cargo loaded.')
+            if moveShipTweened(ship, loadDockCFrame) then
+                notify('Arrived at load dock.')
+                
+                -- Kargo yükle
+                if handleCargo("load", ship, selectedDockLoad) then
+                    wait(waitTime) -- Kargo yükleme bekleme süresi
+                    
+                    -- Kargo boşaltma limanına git
+                    notify('Going to unload dock: ' .. selectedDockUnload)
+                    local unloadDockCFrame = docks[selectedDockUnload]
+                    if moveShipTweened(ship, unloadDockCFrame) then
+                        notify('Arrived at unload dock.')
+                        
+                        -- Kargo boşalt
+                        if handleCargo("unload", ship, selectedDockUnload) then
+                            notify('Cargo cycle completed.')
+                            wait(waitTime) -- Kargo boşaltma bekleme süresi
+                        else
+                            notify('Cargo unloading failed. Retrying...')
+                        end
+                    else
+                        notify('Failed to reach unload dock.')
+                    end
+                else
+                    notify('Cargo loading failed. Retrying...')
+                end
             else
-                notify('Load dock object not found! Skipping load.')
+                notify('Failed to reach load dock.')
             end
-
-            wait(waitTime) -- Kargo yükleme bekleme süresi
-
-            -- Kargo boşaltma limanına git
-            notify('Going to unload dock: ' .. selectedDockUnload)
-            local unloadDockCFrame = docks[selectedDockUnload]
-            moveShipTweened(ship, unloadDockCFrame)
-            notify('Arrived at unload dock.')
-
-            local unloadDockPart = workspace:FindFirstChild(selectedDockUnload)
-            if unloadDockPart then
-                workspace.HandleCargoEvent:FireServer(
-                    'unload',
-                    ship,
-                    unloadDockPart
-                )
-                notify('Cargo unloaded.')
-            else
-                notify('Unload dock object not found! Skipping unload.')
-            end
-
-            wait(waitTime) -- Kargo boşaltma bekleme süresi
-
-            -- Gemi tekrar yükleme limanına geri dönsün
-            notify('Returning to load dock for next cycle.')
-            moveShipTweened(ship, loadDockCFrame)
-            notify('Ready for next cycle.')
-            wait(2)
+            
+            wait(2) -- Döngü arası bekleme
         end
     end)
 end

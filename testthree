@@ -80,12 +80,11 @@ local docks = {
     ['BulkDock4'] = CFrame.new(-27254.541, -39.065, -18065.66),
     ['BulkDock5'] = CFrame.new(-14125.276, -39.065, -43640.438),
 
-    -- Container Docks
-    ['ContainerDock1'] = CFrame.new(26801.992, -30.315, -7070.906),
-    ['ContainerDock2'] = CFrame.new(-5978.055, -30.315, 26995.453),
-    ['ContainerDock3'] = CFrame.new(-14469.223, -30.315, -43598.836),
-    ['ContainerDock4'] = CFrame.new(-26785.793, -30.315, -14709.691),
-    ['ContainerDock5'] = CFrame.new(-27036.588, -30.315, -16705.451),
+    -- Container Docks (isimlendirilmiş)
+    ['Ronne']     = CFrame.new(26812.4707, 0.4706, -7059.3623),
+    ['Wolin']     = CFrame.new(-5978.2998, -79.8438, 26994.9043),
+    ['Ushuaia']   = CFrame.new(-14465.8477, 1.6972, -43598.5273),
+    ['SantaCruz'] = CFrame.new(-26786.0430, -109.2813, -14707.1787),
 
     -- Ferry Docks
     ['FerryDock1'] = CFrame.new(26400.57, -30.315, -10151.258),

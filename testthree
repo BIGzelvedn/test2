@@ -71,6 +71,7 @@ local shipNames = {
     'Mariner-class RO/RO',
     'Fishing cutter', -- Eklendi
     'Sally-class Cruiseferry',
+    'Mariella-class cruiseferry',
 }
 
 -- Dock koordinatları
